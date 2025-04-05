@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Gemstone Dice Dash V3</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        /* Custom Styles */
+        :root {
+            --grid-size: 7;
+            --gem-order-red: 1; --gem-order-orange: 2; --gem-order-yellow: 3;
+            --gem-order-green: 4; --gem-order-blue: 5; --gem-order-purple: 6;
+        }
+
+        body { /* (Same as V2) */ font-family: 'Press Start 2P', cursive; overscroll-behavior: none; touch-action: none; background: linear-gradient(135deg, #432d77 0%, #348ca3 100%); display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; color: #fff; }
+        .game-container { /* (Same as V2) */ background-color: rgba(0, 0, 0, 0.65); padding: 15px; border-radius: 20px; box-shadow: 0 12px 35px rgba(0, 0, 0, 0.6); text-align: center; width: 95%; max-width: 400px; position: relative; overflow: hidden; border: 3px solid rgba(255, 255, 255, 0.25); }
+
+        /* Stats & Scorecard Area */
+        .info-area {
+            display: flex;
+            flex-direction: column;
+            gap: 10px; /* Space between stats and scorecard */
+            margin-bottom: 10px;
+        }
+        .stats-container { display: flex; justify-content: space-around; font-size: 0.8rem; /* Slightly smaller */ flex-wrap: wrap; gap: 5px;}
+        .score-pop { animation: score-pop-anim 0.5s ease-out; display: inline-block; }
+        @keyframes score-pop-anim { 0% { transform: scale(1); color: #fff; } 50% { transform: scale(1.4); color: #ffeb3b; } 100% { transform: scale(1); color: #fff; } }
+
+        /* Scorecard Styling */
+        .scorecard-area {
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .scorecard-title { font-size: 0.7rem; margin-bottom: 5px; color: #ccc; text-transform: uppercase; }
+        .scorecard-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr); /* Two columns */
+            gap: 4px 8px; /* Row gap, Column gap */
+            font-size: 0.7rem; /* Smaller font for scorecard */
+        }
+        .scorecard-slot {
+            background-color: rgba(255, 255, 255, 0.05);
+            padding: 3px 5px;
+            border-radius: 4px;
+            text-align: left;
+            cursor: default;
+            transition: background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .scorecard-slot .name { color: #eee; }
+        .scorecard-slot .score { float: right; font-weight: bold; color: #ffeb3b; /* Yellow score */ }
+        .scorecard-slot .score.empty { color: #aaa; } /* Grey for empty slots */
+        .scorecard-slot.selectable {
+            background-color: rgba(118, 255, 3, 0.3); /* Greenish highlight */
+            cursor: pointer;
+            box-shadow: 0 0 8px rgba(118, 255, 3, 0.7);
+        }
+         .scorecard-slot.selectable:hover { background-color: rgba(118, 255, 3, 0.4); }
+         .scorecard-slot.filled {
+             background-color: rgba(100, 100, 100, 0.3);
+             cursor: not-allowed;
+             opacity: 0.8;
+         }
+         .scorecard-slot.filled .name { color: #bbb; }
+
+
+        .game-grid { /* (Same as V2) */ display: grid; grid-template-columns: repeat(var(--grid-size), 1fr); grid-template-rows: repeat(var(--grid-size), 1fr); gap: 4px; background-color: rgba(0, 0, 0, 0.25); background-image: linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px); background-size: calc(100% / var(--grid-size)) calc(100% / var(--grid-size)); border-radius: 10px; padding: 8px; margin: 10px auto; aspect-ratio: 1 / 1; touch-action: none; border: 1px solid rgba(255, 255, 255, 0.15); }
+        .gem { /* (Same as V2) */ border-radius: 6px; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: clamp(1rem, 6vw, 1.5rem); user-select: none; aspect-ratio: 1 / 1; transition: transform 0.2s ease-out, opacity 0.3s ease-out, box-shadow 0.2s ease-out; box-shadow: inset 0 0 5px rgba(255,255,255,0.4), 0 2px 4px rgba(0,0,0,0.35); position: relative; overflow: hidden; background-clip: padding-box; }
+        .gem::after { /* (Shine - Same as V2) */ content: ''; position: absolute; top: -50%; left: -50%; width: 20%; height: 200%; background: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.3) 50%, rgba(255, 255, 255, 0) 100%); transform: rotate(45deg); opacity: 0; transition: opacity 0.3s ease; }
+        .gem:hover::after { opacity: 1; animation: shine 3s infinite linear; }
+        @keyframes shine { 0% { transform: rotate(45deg) translateX(-200%); } 100% { transform: rotate(45deg) translateX(200%); } }
+        .gem-red { background: radial-gradient(circle, #ff8a8a, #f54e4e); } .gem-blue { background: radial-gradient(circle, #8ab7ff, #4d94ff); } .gem-green { background: radial-gradient(circle, #90ff8a, #52ff4d); } .gem-yellow { background: radial-gradient(circle, #fff98a, #ffe04d); } .gem-purple { background: radial-gradient(circle, #e08aff, #c54dff); } .gem-orange { background: radial-gradient(circle, #ffcd8a, #ff9e4d); }
+        .gem-bomb { background: radial-gradient(circle, #9e9e9e, #616161); color: white; font-weight: bold; text-shadow: 1px 1px 2px black; } .gem-bomb::before { content: 'B'; }
+        .gem-color_burst { background: radial-gradient(circle, #ffffff, #e0e0e0); color: #ff4081; font-weight: bold; animation: color-burst-pulse 1s infinite ease-in-out; } .gem-color_burst::before { content: '★'; } @keyframes color-burst-pulse { 0% { transform: scale(1); box-shadow: inset 0 0 5px #fff, 0 0 5px #ff4081; } 50% { transform: scale(1.1); box-shadow: inset 0 0 10px #fff, 0 0 15px #ff4081; } 100% { transform: scale(1); box-shadow: inset 0 0 5px #fff, 0 0 5px #ff4081; } }
+        .gem.selected { transform: scale(1.15); box-shadow: 0 0 20px 8px rgba(255, 255, 120, 0.85); }
+        .gem.matched { animation: match-pop 0.4s ease-out forwards; } .gem.bonus-clear { animation: bonus-clear-pop 0.5s ease-in-out forwards; } .gem.bomb-clear { animation: bomb-pop 0.4s ease-out forwards; } .gem.burst-clear { animation: burst-vanish 0.5s ease-in forwards; }
+        @keyframes match-pop { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.3); opacity: 0.5; } 100% { transform: scale(0); opacity: 0; } } @keyframes bonus-clear-pop { 0% { transform: scale(1) rotate(0deg); opacity: 1; box-shadow: 0 0 15px 5px #fff; } 50% { transform: scale(1.2) rotate(180deg); opacity: 0.7; box-shadow: 0 0 25px 10px #fff; } 100% { transform: scale(0) rotate(360deg); opacity: 0; } } @keyframes bomb-pop { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: 0.8; background-color: orange; } 100% { transform: scale(0); opacity: 0; } } @keyframes burst-vanish { 0% { opacity: 1; filter: brightness(1.5); } 100% { opacity: 0; filter: brightness(3); transform: scale(0.5); } }
+        .gem.falling { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        /* Dice Meter (Same as V2) */
+        .dice-meter-container { height: 25px; background-color: rgba(0, 0, 0, 0.5); border-radius: 10px; margin: 5px 0 10px 0; /* Adjusted margin */ overflow: hidden; border: 2px solid #aaa; }
+        .dice-meter-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #ffee58, #ffb300); border-radius: 8px 0 0 8px; transition: width 0.5s ease-in-out; box-shadow: inset 0 0 8px rgba(255,255,255,0.7); }
+        .dice-meter-bar.full { animation: pulse-meter 1.5s infinite ease-in-out; }
+        @keyframes pulse-meter { 0% { box-shadow: inset 0 0 8px rgba(255,255,255,0.7), 0 0 5px #ffeb3b; } 50% { box-shadow: inset 0 0 12px rgba(255,255,255,0.9), 0 0 15px #ffeb3b; } 100% { box-shadow: inset 0 0 8px rgba(255,255,255,0.7), 0 0 5px #ffeb3b; } }
+
+        /* Dice Area (Same as V2) */
+        .dice-area { display: none; flex-direction: column; align-items: center; margin-top: 10px; padding: 10px; background-color: rgba(0, 0, 0, 0.6); border-radius: 10px; }
+        .dice-display { display: flex; justify-content: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; perspective: 600px; }
+        .dice { width: 40px; height: 40px; border-radius: 5px; display: flex; justify-content: center; align-items: center; font-size: 20px; border: 1px solid rgba(255,255,255,0.5); box-shadow: 0 2px 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2); background-color: #e0e0e0; position: relative; transform-style: preserve-3d; transition: transform 0.5s ease-out, box-shadow 0.2s ease-out, opacity 0.2s ease-out; cursor: pointer; }
+        .dice.held { opacity: 0.7; box-shadow: 0 0 10px 3px #00bcd4, inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2); transform: scale(0.95); }
+        .dice.rolling { animation: roll 0.1s infinite linear; }
+        @keyframes roll { 0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); } 100% { transform: rotateX(360deg) rotateY(720deg) rotateZ(360deg); } }
+
+        /* Buttons (Same as V2) */
+        .game-button { font-family: 'Press Start 2P', cursive; background: linear-gradient(180deg, #5cb85c, #449d44); color: white; padding: 9px 16px; border: none; border-radius: 8px; cursor: pointer; font-size: 0.8rem; text-transform: uppercase; box-shadow: 0 4px 0 #357a38, 0 5px 8px rgba(0, 0, 0, 0.3); transition: all 0.1s ease-out; margin-top: 5px; }
+        .game-button:hover:not(:disabled) { background: linear-gradient(180deg, #6cd96c, #4cc74c); transform: translateY(-1px); box-shadow: 0 5px 0 #357a38, 0 6px 10px rgba(0, 0, 0, 0.35); }
+        .game-button:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 2px 0 #357a38, 0 3px 5px rgba(0, 0, 0, 0.3); }
+        .game-button:disabled { background: linear-gradient(180deg, #aaa, #888); cursor: not-allowed; opacity: 0.7; box-shadow: 0 4px 0 #666, 0 5px 8px rgba(0, 0, 0, 0.2); }
+        #restart-button { background: linear-gradient(180deg, #d9534f, #c9302c); box-shadow: 0 4px 0 #a92824, 0 5px 8px rgba(0, 0, 0, 0.3); }
+        #restart-button:hover:not(:disabled) { background: linear-gradient(180deg, #e0635f, #d63c38); box-shadow: 0 5px 0 #a92824, 0 6px 10px rgba(0, 0, 0, 0.35); }
+        #restart-button:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 2px 0 #a92824, 0 3px 5px rgba(0, 0, 0, 0.3); }
+
+        /* Message Overlay (Same as V2) */
+        .message-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.85); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; padding: 20px; border-radius: 15px; }
+        .message-box { background-color: #4a148c; padding: 30px; border-radius: 10px; box-shadow: 0 8px 25px rgba(0,0,0,0.6); border: 3px solid #ab47bc; max-width: 90%; }
+
+        /* Story Intro (Same as V2) */
+        .story-intro { font-size: 0.8rem; margin-bottom: 5px; color: #ddd; line-height: 1.5; padding: 8px 12px; background-color: rgba(255, 255, 255, 0.08); border-radius: 8px; }
+
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1 class="text-xl sm:text-2xl font-bold mb-1 text-yellow-300 tracking-wider">Gemstone Dice Dash</h1>
+
+        <div id="story-intro" class="story-intro">
+            </div>
+
+        <div class="info-area">
+            <div class="stats-container">
+                <div>Lv: <span id="level">1</span></div>
+                <div>Score: <span id="score-value">0</span></div>
+                <div>Moves: <span id="moves-left">30</span></div>
+                <div>Slots: <span id="slots-filled">0</span>/<span id="target-slots">3</span></div>
+            </div>
+
+            <div id="scorecard-area" class="scorecard-area">
+                <div class="scorecard-title">Yahtzee Goals</div>
+                <div class="scorecard-grid">
+                    <div class="scorecard-slot" data-category="three_of_kind"><span class="name">3 of a Kind:</span><span class="score empty">-</span></div>
+                    <div class="scorecard-slot" data-category="four_of_kind"><span class="name">4 of a Kind:</span><span class="score empty">-</span></div>
+                    <div class="scorecard-slot" data-category="full_house"><span class="name">Full House:</span><span class="score empty">-</span></div>
+                    <div class="scorecard-slot" data-category="small_straight"><span class="name">Sm. Straight:</span><span class="score empty">-</span></div>
+                    <div class="scorecard-slot" data-category="large_straight"><span class="name">Lg. Straight:</span><span class="score empty">-</span></div>
+                    <div class="scorecard-slot" data-category="yahtzee"><span class="name">YAHTZEE:</span><span class="score empty">-</span></div>
+                    </div>
+            </div>
+        </div>
+
+
+        <div class="text-xs mb-1">Dice Meter</div>
+        <div class="dice-meter-container">
+            <div id="dice-meter-bar" class="dice-meter-bar"></div>
+        </div>
+
+        <div id="game-grid" class="game-grid">
+            </div>
+
+        <div id="dice-area" class="dice-area">
+            <div id="dice-display" class="dice-display">
+                </div>
+            <div id="dice-result-text" class="text-sm my-2 font-semibold"></div>
+            <button id="roll-dice-button" class="game-button" disabled>Roll Dice!</button>
+        </div>
+
+         <button id="restart-button" class="game-button mt-3">Restart Level</button>
+
+        <div id="message-overlay" class="message-overlay">
+             <div class="message-box">
+                <h2 id="message-title" class="text-lg sm:text-xl font-bold mb-3 text-yellow-300"></h2>
+                <p id="message-text" class="mb-4 text-sm sm:text-base"></p>
+                <button id="message-button" class="game-button">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Game Configuration ---
+        const GRID_SIZE = 7;
+        const GEM_TYPES = ['red', 'orange', 'yellow', 'green', 'blue', 'purple'];
+        const INITIAL_MOVES = 30; // Base moves
+        const MIN_MATCH_LENGTH = 3;
+        const BOMB_MATCH_LENGTH = 4;
+        const BURST_MATCH_LENGTH = 5;
+        const DICE_METER_MAX = 40; // Increased meter requirement further
+        const DICE_COUNT = 5;
+        const MAX_DICE_ROLLS = 3;
+        const GEM_ORDER = Object.freeze({ red: 1, orange: 2, yellow: 3, green: 4, blue: 5, purple: 6 });
+        // Yahtzee Category Scores (Fixed)
+        const CATEGORY_SCORES = Object.freeze({
+            three_of_kind: 15, four_of_kind: 20, full_house: 25,
+            small_straight: 30, large_straight: 40, yahtzee: 50
+        });
+        const SCORECARD_CATEGORIES = Object.keys(CATEGORY_SCORES);
+
+        // --- DOM Elements ---
+        const gridElement = document.getElementById('game-grid');
+        const scoreValueElement = document.getElementById('score-value');
+        const movesLeftElement = document.getElementById('moves-left');
+        const levelElement = document.getElementById('level');
+        const slotsFilledElement = document.getElementById('slots-filled');
+        const targetSlotsElement = document.getElementById('target-slots');
+        const storyIntroElement = document.getElementById('story-intro');
+        const diceMeterBar = document.getElementById('dice-meter-bar');
+        const diceArea = document.getElementById('dice-area');
+        const diceDisplay = document.getElementById('dice-display');
+        const rollDiceButton = document.getElementById('roll-dice-button');
+        const diceResultText = document.getElementById('dice-result-text');
+        const restartButton = document.getElementById('restart-button');
+        const messageOverlay = document.getElementById('message-overlay');
+        const messageTitle = document.getElementById('message-title');
+        const messageText = document.getElementById('message-text');
+        const messageButton = document.getElementById('message-button');
+        const scorecardArea = document.getElementById('scorecard-area');
+
+        // --- Game State ---
+        let grid = [];
+        let score = 0;
+        let currentLevel = 1;
+        let targetSlotsFilled = 3; // Initial goal
+        let slotsFilledCount = 0;
+        let movesLeft = INITIAL_MOVES;
+        let scorecard = {}; // { category: score | null }
+        let selectedGem = null;
+        let isSwapping = false;
+        let isCheckingMatches = false;
+        let diceMeterValue = 0;
+        let currentDice = [];
+        let heldDiceIndices = new Set();
+        let diceRollCount = 0;
+        let isGameOver = false;
+        let isDicePhaseActive = false;
+        let isAwaitingSlotSelection = false; // New flag
+
+        // --- Sound Effects ---
+        // (Assume sounds variables are declared as in V2)
+        let matchSound, fallSound, swapSound, diceSound, winSound, loseSound, buttonSound, meterFullSound, holdSound, specialGemSound, bombSound, burstSound, scoreSlotSound;
+        let soundsInitialized = false;
+
+        function initializeSounds() {
+            // (Initialize all sounds as in V2, plus new one)
+             if (soundsInitialized || typeof Tone === 'undefined') return;
+            try {
+                Tone.start();
+                matchSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.1, release: 0.1 } }).toDestination(); matchSound.volume.value = -10;
+                fallSound = new Tone.PluckSynth({ attackNoise: 0.5, dampening: 4000, resonance: 0.7 }).toDestination(); fallSound.volume.value = -15;
+                swapSound = new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.005, decay: 0.05, sustain: 0, release: 0.1 } }).toDestination(); swapSound.volume.value = -18;
+                diceSound = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.005, decay: 0.15, sustain: 0 } }).toDestination(); diceSound.volume.value = -15;
+                winSound = new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.05, decay: 0.2, sustain: 0.3, release: 0.5 } }).toDestination(); winSound.volume.value = -8;
+                loseSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.1, decay: 0.5, sustain: 0, release: 0.5 } }).toDestination(); loseSound.volume.value = -10;
+                buttonSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.05, sustain: 0, release: 0.1 } }).toDestination(); buttonSound.volume.value = -20;
+                meterFullSound = new Tone.Synth({ oscillator: { type: 'sawtooth' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.2, release: 0.2 } }).toDestination(); meterFullSound.volume.value = -12;
+                holdSound = new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.005, decay: 0.03, sustain: 0, release: 0.05 } }).toDestination(); holdSound.volume.value = -22;
+                specialGemSound = new Tone.Synth({ oscillator: { type: 'pulse', width: 0.4 }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.2 } }).toDestination(); specialGemSound.volume.value = -14;
+                bombSound = new Tone.NoiseSynth({ noise: { type: 'brown' }, envelope: { attack: 0.01, decay: 0.3, sustain: 0.1, release: 0.2 } }).toDestination(); bombSound.volume.value = -8;
+                burstSound = new Tone.Synth({ oscillator: { type: 'fmtriangle', modulationType: 'sine', harmonicity: 1.5 }, envelope: { attack: 0.1, decay: 0.3, sustain: 0.1, release: 0.5 } }).toDestination(); burstSound.volume.value = -10;
+                scoreSlotSound = new Tone.Synth({ oscillator: { type: 'triangle8' }, envelope: { attack: 0.01, decay: 0.15, sustain: 0.1, release: 0.2 } }).toDestination(); scoreSlotSound.volume.value = -12; // Sound for scoring a slot
+
+                soundsInitialized = true; console.log("Sounds initialized");
+            } catch (error) { console.error("Error initializing sounds:", error); }
+        }
+        function playSound(sound, note = 'C4', duration = '8n', time = '+0.01') { /* (Same playback logic) */ if (soundsInitialized && sound) { try { if (sound instanceof Tone.Synth || sound instanceof Tone.PluckSynth) { sound.triggerAttackRelease(note, duration, Tone.now() + parseFloat(time.replace('+', ''))); } else if (sound instanceof Tone.NoiseSynth) { sound.triggerAttackRelease(duration, Tone.now() + parseFloat(time.replace('+', ''))); } } catch (error) { console.error("Sound playback error:", error); } } }
+
+        // --- Game Initialization ---
+        function initGame(level = 1) {
+            console.log(`Initializing game for Level ${level}...`);
+            document.documentElement.style.setProperty('--grid-size', GRID_SIZE);
+
+            currentLevel = level;
+            // Level Goal: Fill more slots as level increases
+            targetSlotsFilled = Math.min(SCORECARD_CATEGORIES.length, 2 + currentLevel); // Need 3 slots level 1, 4 level 2, etc., max 6
+            movesLeft = Math.max(15, INITIAL_MOVES - (level - 1) * 2);
+
+            // Reset state variables
+            isGameOver = false; score = 0; slotsFilledCount = 0; diceMeterValue = 0;
+            selectedGem = null; isSwapping = false; isCheckingMatches = false;
+            isDicePhaseActive = false; isAwaitingSlotSelection = false;
+            diceRollCount = 0; heldDiceIndices.clear(); currentDice = [];
+            initializeScorecard(); // Reset scorecard state and UI
+
+            gridElement.innerHTML = '';
+            diceArea.style.display = 'none';
+            rollDiceButton.disabled = true; rollDiceButton.textContent = "Roll Dice!";
+            diceMeterBar.classList.remove('full'); diceMeterBar.style.width = '0%';
+            messageOverlay.style.display = 'none';
+
+            updateLevelUI();
+            createGrid();
+            updateUI();
+
+            setTimeout(() => { // Delay initial check
+                handleMatchesAndRefill().then(() => {
+                    console.log("Initial board check complete."); checkPossibleMoves();
+                });
+            }, 700 + (GRID_SIZE * GRID_SIZE * 20));
+
+            console.log("Game initialized.");
+        }
+
+        // Initialize/reset the scorecard state and UI
+        function initializeScorecard() {
+            scorecard = {};
+            SCORECARD_CATEGORIES.forEach(category => {
+                scorecard[category] = null; // null means empty
+                const slotElement = scorecardArea.querySelector(`.scorecard-slot[data-category="${category}"]`);
+                if (slotElement) {
+                    slotElement.classList.remove('filled', 'selectable');
+                    slotElement.querySelector('.score').textContent = '-';
+                    slotElement.querySelector('.score').classList.add('empty');
+                    // Remove any previous click listeners
+                    slotElement.replaceWith(slotElement.cloneNode(true));
+                }
+            });
+            slotsFilledCount = 0; // Reset count
+        }
+
+        function updateLevelUI() { /* (Same as V2) */ levelElement.textContent = currentLevel; storyIntroElement.textContent = `Kai's Quest - Level ${currentLevel}: ${getLevelName(currentLevel)}. Fill ${targetSlotsFilled} Yahtzee Goals!`; targetSlotsElement.textContent = targetSlotsFilled; }
+        function getLevelName(level) { /* (Same as V2) */ const names = ["The Forgotten Chamber", "Sunken Treasury", "Crystal Caves", "Volcanic Heart", "Sky Temple"]; return names[(level - 1) % names.length]; }
+
+        // --- Grid Creation & Handling ---
+        // createGrid, createsInitialMatch, getRandomGemType, createGemElement (All same as V2)
+        function createGrid() { grid = []; for (let r = 0; r < GRID_SIZE; r++) { grid[r] = []; for (let c = 0; c < GRID_SIZE; c++) { let gemType; let attempts = 0; do { gemType = getRandomGemType(); attempts++; if (attempts > 100) { console.warn("Could not place non-matching gem."); break; } } while (createsInitialMatch(r, c, gemType)); grid[r][c] = { type: gemType, element: null, isSpecial: false, specialType: null }; } } for (let r = 0; r < GRID_SIZE; r++) { for (let c = 0; c < GRID_SIZE; c++) { grid[r][c].element = createGemElement(r, c, grid[r][c].type); } } console.log("Grid created."); }
+        function createsInitialMatch(r, c, type) { if (c >= 2 && grid[r][c-1]?.type === type && grid[r][c-2]?.type === type) return true; if (r >= 2 && grid[r-1][c]?.type === type && grid[r-2][c]?.type === type) return true; return false; }
+        function getRandomGemType() { return GEM_TYPES[Math.floor(Math.random() * GEM_TYPES.length)]; }
+        function createGemElement(row, col, type, isSpecial = false, specialType = null) { const gem = document.createElement('div'); gem.classList.add('gem', `gem-${type}`); if (isSpecial) { gem.classList.add(`gem-${specialType}`); } gem.dataset.row = row; gem.dataset.col = col; gem.style.transform = `translateY(-${(GRID_SIZE - row) * 50}px)`; gem.style.opacity = '0'; gridElement.appendChild(gem); gem.addEventListener('pointerdown', handleGemPointerDown); gem.addEventListener('pointerenter', handleGemPointerEnter); gem.addEventListener('pointerup', handleGemPointerUp); requestAnimationFrame(() => { setTimeout(() => { gem.style.transition = `transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease-out`; gem.style.transform = 'translateY(0)'; gem.style.opacity = '1'; }, (row * GRID_SIZE + col) * 20); }); return gem; }
+
+        // --- Event Handling & Swap Logic ---
+        // handleGemPointerDown, handleGemPointerEnter, handleGemPointerUp, areAdjacent (All same as V2)
+        // attemptSwap, findMatchesAfterSwap, animateSwap (All same as V2)
+        function handleGemPointerDown(event) { event.preventDefault(); if (isSwapping || isCheckingMatches || isGameOver || isDicePhaseActive || isAwaitingSlotSelection) return; if (!soundsInitialized) initializeSounds(); playSound(buttonSound, 'C5', '16n'); const target = event.target.closest('.gem'); if (!target) return; const row = parseInt(target.dataset.row); const col = parseInt(target.dataset.col); if (selectedGem) { const prevRow = selectedGem.row; const prevCol = selectedGem.col; selectedGem.element.classList.remove('selected'); if (selectedGem.element === target) { selectedGem = null; } else if (areAdjacent(row, col, prevRow, prevCol)) { attemptSwap(row, col, prevRow, prevCol); } else { selectedGem = { row, col, element: target }; target.classList.add('selected'); } isDragging = false; } else { selectedGem = { row, col, element: target }; target.classList.add('selected'); isDragging = true; } }
+        function handleGemPointerEnter(event) { event.preventDefault(); if (!isDragging || !selectedGem || isSwapping || isCheckingMatches || isGameOver || isDicePhaseActive || isAwaitingSlotSelection) return; const target = event.target.closest('.gem'); if (!target || target === selectedGem.element) return; const row = parseInt(target.dataset.row); const col = parseInt(target.dataset.col); if (areAdjacent(row, col, selectedGem.row, selectedGem.col)) { selectedGem.element.classList.remove('selected'); attemptSwap(row, col, selectedGem.row, selectedGem.col); isDragging = false; selectedGem = null; } }
+        function handleGemPointerUp(event) { event.preventDefault(); isDragging = false; }
+        function areAdjacent(r1, c1, r2, c2) { return Math.abs(r1 - r2) + Math.abs(c1 - c2) === 1; }
+        async function attemptSwap(r1, c1, r2, c2) { if (isSwapping || isCheckingMatches || isGameOver || isDicePhaseActive || isAwaitingSlotSelection) return; isSwapping = true; if (selectedGem) { selectedGem.element.classList.remove('selected'); selectedGem = null; } const cell1 = grid[r1][c1]; const cell2 = grid[r2][c2]; if (!cell1 || !cell2 || !cell1.element || !cell2.element) { console.error("Swap error: cells/elements missing."); isSwapping = false; return; } await animateSwap(cell1.element, cell2.element); playSound(swapSound, 'E5', '16n'); grid[r1][c1] = cell2; grid[r2][c2] = cell1; cell1.element.dataset.row = r2; cell1.element.dataset.col = c2; cell2.element.dataset.row = r1; cell2.element.dataset.col = c1; const involvedSpecialGem = cell1.isSpecial || cell2.isSpecial; const matches = findMatchesAfterSwap(r1, c1, r2, c2); if (matches.length > 0 || involvedSpecialGem) { movesLeft--; updateUI(); await handleMatchesAndRefill(matches); checkLevelComplete(); } else { await animateSwap(cell1.element, cell2.element); grid[r1][c1] = cell1; grid[r2][c2] = cell2; cell1.element.dataset.row = r1; cell1.element.dataset.col = c1; cell2.element.dataset.row = r2; cell2.element.dataset.col = c2; playSound(swapSound, 'C4', '16n', '+0.1'); } isSwapping = false; }
+        function findMatchesAfterSwap(r1, c1, r2, c2) { const matches = new Set(); const checkPoints = [{r: r1, c: c1}, {r: r2, c: c2}]; checkPoints.forEach(p => { const cell = grid[p.r]?.[p.c]; if (!cell || cell.isSpecial) return; const type = cell.type; let hMatch = [{ row: p.r, col: p.c }]; for (let c = p.c - 1; c >= 0 && grid[p.r][c]?.type === type && !grid[p.r][c]?.isSpecial; c--) hMatch.unshift({ row: p.r, col: c }); for (let c = p.c + 1; c < GRID_SIZE && grid[p.r][c]?.type === type && !grid[p.r][c]?.isSpecial; c++) hMatch.push({ row: p.r, col: c }); if (hMatch.length >= MIN_MATCH_LENGTH) hMatch.forEach(gem => matches.add(`${gem.row}-${gem.col}`)); let vMatch = [{ row: p.r, col: p.c }]; for (let r = p.r - 1; r >= 0 && grid[r][p.c]?.type === type && !grid[r][p.c]?.isSpecial; r--) vMatch.unshift({ row: r, col: p.c }); for (let r = p.r + 1; r < GRID_SIZE && grid[r][p.c]?.type === type && !grid[r][p.c]?.isSpecial; r++) vMatch.push({ row: r, col: p.c }); if (vMatch.length >= MIN_MATCH_LENGTH) vMatch.forEach(gem => matches.add(`${gem.row}-${gem.col}`)); }); return Array.from(matches).map(id => { const [row, col] = id.split('-').map(Number); return { row, col }; }); }
+        function animateSwap(gem1, gem2) { /* (Same as V2) */ return new Promise(resolve => { const rect1 = gem1.getBoundingClientRect(); const rect2 = gem2.getBoundingClientRect(); const deltaX = rect2.left - rect1.left; const deltaY = rect2.top - rect1.top; gem1.style.transition = 'transform 0.2s ease-out'; gem2.style.transition = 'transform 0.2s ease-out'; gem1.style.transform = `translate(${deltaX}px, ${deltaY}px)`; gem2.style.transform = `translate(${-deltaX}px, ${-deltaY}px)`; gem1.style.zIndex = '10'; gem2.style.zIndex = '5'; let transitionsCompleted = 0; const onTransitionEnd = (event) => { if (event.target === gem1 || event.target === gem2) { event.target.removeEventListener('transitionend', onTransitionEnd); transitionsCompleted++; if (transitionsCompleted === 2) { gem1.style.transform = ''; gem2.style.transform = ''; gem1.style.zIndex = ''; gem2.style.zIndex = ''; gem1.style.transition = ''; gem2.style.transition = ''; resolve(); } } }; gem1.addEventListener('transitionend', onTransitionEnd); gem2.addEventListener('transitionend', onTransitionEnd); setTimeout(() => { if (transitionsCompleted < 2) { console.warn("Swap fallback."); gem1.removeEventListener('transitionend', onTransitionEnd); gem2.removeEventListener('transitionend', onTransitionEnd); gem1.style.transform = ''; gem2.style.transform = ''; gem1.style.zIndex = ''; gem2.style.zIndex = ''; gem1.style.transition = ''; gem2.style.transition = ''; resolve(); } }, 250); }); }
+
+        // --- Match Detection & Handling ---
+        // findMatches (Same as V2)
+        // handleMatchesAndRefill (Mostly same logic for cascades, special gem creation/triggering)
+        // calculateMatchScore, animateScoreUpdate (Same as V2)
+        // animateAndRemoveMatch (Same as V2)
+        // handleFallingGems, reorderGridElements, refillGrid (Same as V2)
+        function findMatches() { const matches = new Set(); for (let r = 0; r < GRID_SIZE; r++) { for (let c = 0; c <= GRID_SIZE - MIN_MATCH_LENGTH; c++) { const cell = grid[r][c]; if (!cell || cell.isSpecial) continue; const type = cell.type; if (grid[r][c+1]?.type === type && !grid[r][c+1]?.isSpecial && grid[r][c+2]?.type === type && !grid[r][c+2]?.isSpecial) { let matchLength = 3; while (c + matchLength < GRID_SIZE && grid[r][c+matchLength]?.type === type && !grid[r][c+matchLength]?.isSpecial) matchLength++; for (let i = 0; i < matchLength; i++) matches.add(`${r}-${c+i}`); c += matchLength - 1; } } } for (let c = 0; c < GRID_SIZE; c++) { for (let r = 0; r <= GRID_SIZE - MIN_MATCH_LENGTH; r++) { const cell = grid[r][c]; if (!cell || cell.isSpecial) continue; const type = cell.type; if (grid[r+1][c]?.type === type && !grid[r+1][c]?.isSpecial && grid[r+2][c]?.type === type && !grid[r+2][c]?.isSpecial) { let matchLength = 3; while (r + matchLength < GRID_SIZE && grid[r+matchLength][c]?.type === type && !grid[r+matchLength][c]?.isSpecial) matchLength++; for (let i = 0; i < matchLength; i++) matches.add(`${r+i}-${c}`); r += matchLength - 1; } } } return Array.from(matches).map(id => { const [row, col] = id.split('-').map(Number); return { row, col }; }); }
+        async function handleMatchesAndRefill(initialMatches = null) { if (isCheckingMatches) return; isCheckingMatches = true; let currentMatchesCoords = initialMatches || findMatches(); let specialGemsTriggered = new Set(); let gemsToRemoveInitially = []; for (const { row, col } of currentMatchesCoords) { const cell = grid[row]?.[col]; if (cell?.isSpecial && !specialGemsTriggered.has(`${row}-${col}`)) { specialGemsTriggered.add(`${row}-${col}`); gemsToRemoveInitially.push({ row, col }); if (cell.specialType === 'bomb') { playSound(bombSound, undefined, '4n'); getGemsInArea(row, col, 1).forEach(coord => gemsToRemoveInitially.push(coord)); } else if (cell.specialType === 'color_burst') { playSound(burstSound, 'C5', '2n'); let targetType = null; const neighbors = [{r:row-1,c:col},{r:row+1,c:col},{r:row,c:col-1},{r:row,c:col+1}]; for(const n of neighbors) { const neighborCell = grid[n.r]?.[n.c]; if(neighborCell && !neighborCell.isSpecial) { targetType = neighborCell.type; break; } } if (!targetType) targetType = cell.type; if(targetType){ for (let r = 0; r < GRID_SIZE; r++) { for (let c = 0; c < GRID_SIZE; c++) { if (grid[r][c]?.type === targetType && !grid[r][c]?.isSpecial) gemsToRemoveInitially.push({ row: r, col: c }); } } } } } } const uniqueGemsToRemoveInitially = Array.from(new Set(gemsToRemoveInitially.map(g => `${g.row}-${g.col}`))).map(id => { const [row, col] = id.split('-').map(Number); return { row, col }; }); let totalScoreFromCascade = 0; let totalGemsMatched = 0; let cascadeCount = 0; let potentialSpecialGemToCreate = null; let combinedMatchCoords = [...uniqueGemsToRemoveInitially, ...currentMatchesCoords]; let combinedMatches = new Set(combinedMatchCoords.map(g => `${g.row}-${g.col}`)); while (combinedMatches.size > 0) { cascadeCount++; const currentWaveCoords = Array.from(combinedMatches).map(id => { const [row, col] = id.split('-').map(Number); return { row, col }; }); if (cascadeCount === 1 && initialMatches && initialMatches.length >= BOMB_MATCH_LENGTH) { const origin = initialMatches[0]; if (initialMatches.length >= BURST_MATCH_LENGTH) potentialSpecialGemToCreate = { row: origin.row, col: origin.col, type: 'color_burst', baseType: grid[origin.row][origin.col]?.type }; else if (initialMatches.length >= BOMB_MATCH_LENGTH) potentialSpecialGemToCreate = { row: origin.row, col: origin.col, type: 'bomb', baseType: grid[origin.row][origin.col]?.type }; } const validWaveCoords = currentWaveCoords.filter(coord => grid[coord.row]?.[coord.col] !== null); totalGemsMatched += validWaveCoords.length; let scoreForThisWave = calculateMatchScore(validWaveCoords.length, cascadeCount); score += scoreForThisWave; totalScoreFromCascade += scoreForThisWave; animateScoreUpdate(scoreForThisWave); const animationPromises = validWaveCoords.map(coord => { const cell = grid[coord.row][coord.col]; let animClass = 'matched'; if (cell?.isSpecial) animClass = cell.specialType === 'bomb' ? 'bomb-clear' : 'burst-clear'; else if (uniqueGemsToRemoveInitially.some(g => g.row === coord.row && g.col === coord.col)) animClass = 'bomb-clear'; return animateAndRemoveMatch(coord.row, coord.col, animClass); }); await Promise.all(animationPromises); if(validWaveCoords.length > 0 && cascadeCount <= 3) playSound(matchSound, `C${4 + cascadeCount}`, '8n', `+${cascadeCount * 0.05}`); if (potentialSpecialGemToCreate) { const { row, col, type, baseType } = potentialSpecialGemToCreate; if (grid[row]?.[col] === null) { const newElement = createGemElement(row, col, baseType, true, type); grid[row][col] = { type: baseType, element: newElement, isSpecial: true, specialType: type }; playSound(specialGemSound, 'A5', '8n'); } potentialSpecialGemToCreate = null; } await handleFallingGems(); await refillGrid(); await delay(150); const nextMatchesCoords = findMatches(); combinedMatches = new Set(nextMatchesCoords.map(g => `${g.row}-${g.col}`)); uniqueGemsToRemoveInitially.length = 0; } updateDiceMeter(totalGemsMatched); updateUI(); isCheckingMatches = false; checkPossibleMoves(); }
+        function calculateMatchScore(numGems, cascadeLevel) { const baseScore = numGems * 10; const lengthBonus = Math.max(0, numGems - 3) * 10; const cascadeBonus = baseScore * (cascadeLevel - 1) * 0.5; return baseScore + lengthBonus + cascadeBonus; }
+        function animateScoreUpdate(scoreToAdd) { scoreValueElement.classList.add('score-pop'); scoreValueElement.addEventListener('animationend', () => { scoreValueElement.classList.remove('score-pop'); }, { once: true }); }
+        function animateAndRemoveMatch(row, col, animationClass = 'matched') { return new Promise(resolve => { const cell = grid[row]?.[col]; if (!cell || !cell.element) { resolve(); return; } const gemElement = cell.element; grid[row][col] = null; const onAnimationEnd = (event) => { if (event.target === gemElement) { gemElement.removeEventListener('animationend', onAnimationEnd); if (gemElement.parentNode === gridElement) gridElement.removeChild(gemElement); resolve(); } }; gemElement.classList.add(animationClass); gemElement.addEventListener('animationend', onAnimationEnd); setTimeout(() => { if (gemElement.classList.contains(animationClass) && gemElement.parentNode === gridElement) { gemElement.removeEventListener('animationend', onAnimationEnd); gridElement.removeChild(gemElement); resolve(); } else if (!gemElement.parentNode) { resolve(); } }, 600); }); }
+        function handleFallingGems() { return new Promise(async resolve => { let gemsMoved = false; const fallPromises = []; for (let c = 0; c < GRID_SIZE; c++) { let emptyRow = -1; for (let r = GRID_SIZE - 1; r >= 0; r--) { if (grid[r][c] === null && emptyRow === -1) { emptyRow = r; } else if (grid[r][c] !== null && emptyRow !== -1) { const cell = grid[r][c]; const gemElement = cell.element; if (gemElement) { grid[emptyRow][c] = cell; grid[r][c] = null; gemElement.dataset.row = emptyRow; gemElement.classList.add('falling'); const fallDistance = (emptyRow - r); const fallDuration = Math.sqrt(fallDistance) * 0.15 + 0.1; gemElement.style.transition = `transform ${fallDuration}s cubic-bezier(0.4, 0, 0.2, 1)`; gemElement.style.transform = `translateY(${fallDistance * (gemElement.offsetHeight + 4)}px)`; gemsMoved = true; fallPromises.push(new Promise(res => { const onFallEnd = () => { gemElement.removeEventListener('transitionend', onFallEnd); gemElement.classList.remove('falling'); gemElement.style.transform = ''; gemElement.style.transition = ''; res(); }; gemElement.addEventListener('transitionend', onFallEnd); setTimeout(() => { if (gemElement.classList.contains('falling')) onFallEnd(); }, fallDuration * 1000 + 150); })); } else { console.error("Falling missing element", r, c); } emptyRow--; } } } if (gemsMoved) playSound(fallSound, 'C3', '16n', '+0.1'); await Promise.all(fallPromises); reorderGridElements(); resolve(); }); }
+        function reorderGridElements() { const fragment = document.createDocumentFragment(); const currentElementsMap = new Map(); Array.from(gridElement.children).forEach(el => { if (el.dataset.row && el.dataset.col) currentElementsMap.set(`${el.dataset.row}-${el.dataset.col}`, el); else if (!el.classList.contains('matched')&&!el.classList.contains('bonus-clear')&&!el.classList.contains('bomb-clear')&&!el.classList.contains('burst-clear')) console.warn("Reorder missing data:", el); }); for (let r = 0; r < GRID_SIZE; r++) { for (let c = 0; c < GRID_SIZE; c++) { const key = `${r}-${c}`; if (currentElementsMap.has(key)) fragment.appendChild(currentElementsMap.get(key)); else if (grid[r][c] !== null) console.error(`Reorder mismatch: (${r},${c})`); } } gridElement.innerHTML = ''; gridElement.appendChild(fragment); }
+        function refillGrid() { return new Promise(async resolve => { let gemsAdded = false; const newGemPromises = []; for (let c = 0; c < GRID_SIZE; c++) { let addedInCol = 0; for (let r = 0; r < GRID_SIZE; r++) { if (grid[r][c] === null) { const newType = getRandomGemType(); const newElement = createGemElement(r, c, newType); grid[r][c] = { type: newType, element: newElement, isSpecial: false, specialType: null }; gemsAdded = true; addedInCol++; newGemPromises.push(new Promise(res => { const onRefillEnd = (event) => { if (event.propertyName === 'transform' || event.propertyName === 'opacity') { newElement.removeEventListener('transitionend', onRefillEnd); res(); } }; newElement.addEventListener('transitionend', onRefillEnd); setTimeout(() => { newElement.removeEventListener('transitionend', onRefillEnd); res(); }, 600 + addedInCol * 20); })); } } } if (gemsAdded) playSound(fallSound, 'G3', '16n', '+0.2'); await Promise.all(newGemPromises); reorderGridElements(); resolve(); }); }
+        function getGemsInArea(centerRow, centerCol, radius) { const gems = []; for (let r = Math.max(0, centerRow - radius); r <= Math.min(GRID_SIZE - 1, centerRow + radius); r++) { for (let c = Math.max(0, centerCol - radius); c <= Math.min(GRID_SIZE - 1, centerCol + radius); c++) { if (grid[r]?.[c]) gems.push({ row: r, col: c }); } } return gems; }
+
+
+        // --- Dice Mechanic & Scorecard Logic ---
+        function updateDiceMeter(gemsMatched) { /* (Same as V2 - triggers dice phase) */ if (isGameOver) return; const oldValue = diceMeterValue; diceMeterValue = Math.min(DICE_METER_MAX, diceMeterValue + gemsMatched); const percentage = (diceMeterValue / DICE_METER_MAX) * 100; diceMeterBar.style.width = `${percentage}%`; if (diceMeterValue >= DICE_METER_MAX && !isDicePhaseActive) { isDicePhaseActive = true; diceRollCount = 0; heldDiceIndices.clear(); diceMeterBar.classList.add('full'); diceArea.style.display = 'flex'; rollDiceButton.disabled = false; rollDiceButton.textContent = `Roll 1/${MAX_DICE_ROLLS}`; diceResultText.textContent = "Roll for Yahtzee!"; if (oldValue < DICE_METER_MAX) playSound(meterFullSound, 'A4', '4n'); } else if (diceMeterValue < DICE_METER_MAX) { if (!isDicePhaseActive) { rollDiceButton.disabled = true; rollDiceButton.textContent = "Roll Dice!"; } diceMeterBar.classList.remove('full'); } }
+        function rollDice() { /* (Same as V2 - handles rolling/re-rolling) */ if (!isDicePhaseActive || isGameOver || isSwapping || isCheckingMatches || isAwaitingSlotSelection || diceRollCount >= MAX_DICE_ROLLS) return; diceRollCount++; playSound(diceSound, undefined, '4n'); rollDiceButton.disabled = true; diceResultText.textContent = `Rolling... (${diceRollCount}/${MAX_DICE_ROLLS})`; diceDisplay.innerHTML = ''; let diceElementsToAnimate = []; for (let i = 0; i < DICE_COUNT; i++) { const diceElement = document.createElement('div'); diceElement.classList.add('dice'); if (!heldDiceIndices.has(i)) { diceElement.classList.add('rolling', `gem-${getRandomGemType()}`); diceElementsToAnimate.push(diceElement); } else { diceElement.classList.add(`gem-${currentDice[i]}`, 'held'); } diceDisplay.appendChild(diceElement); } setTimeout(() => { diceDisplay.innerHTML = ''; let newDice = []; for (let i = 0; i < DICE_COUNT; i++) { let finalType; if (heldDiceIndices.has(i)) finalType = currentDice[i]; else finalType = getRandomGemType(); newDice.push(finalType); const diceElement = document.createElement('div'); diceElement.classList.add('dice', `gem-${finalType}`); diceElement.dataset.index = i; if (heldDiceIndices.has(i)) diceElement.classList.add('held'); if (diceRollCount < MAX_DICE_ROLLS) diceElement.addEventListener('click', handleDiceHold); else diceElement.style.cursor = 'default'; if (!heldDiceIndices.has(i)) { diceElement.style.transform = 'scale(1.2) rotate(15deg)'; requestAnimationFrame(() => { diceElement.style.transform = 'scale(1) rotate(0deg)'; }); } diceDisplay.appendChild(diceElement); } currentDice = newDice; if (diceRollCount < MAX_DICE_ROLLS) { rollDiceButton.disabled = false; rollDiceButton.textContent = `Roll ${diceRollCount + 1}/${MAX_DICE_ROLLS}`; diceResultText.textContent = "Hold dice or roll again!"; } else { rollDiceButton.disabled = true; rollDiceButton.textContent = "Select Slot"; diceResultText.textContent = "Final Roll! Choose a goal:"; evaluateAndPromptSlotSelection(); } }, 1000); }
+        function handleDiceHold(event) { /* (Same as V2) */ if (diceRollCount === 0 || diceRollCount >= MAX_DICE_ROLLS || isAwaitingSlotSelection) return; const target = event.target.closest('.dice'); if (!target) return; const index = parseInt(target.dataset.index); playSound(holdSound, heldDiceIndices.has(index) ? 'C4' : 'E4', '16n'); if (heldDiceIndices.has(index)) { heldDiceIndices.delete(index); target.classList.remove('held'); } else { heldDiceIndices.add(index); target.classList.add('held'); } }
+
+        // Evaluate final dice and prompt user to select a scorecard slot
+        function evaluateAndPromptSlotSelection() {
+            console.log("Evaluating Final Dice for Scorecard:", currentDice);
+            isAwaitingSlotSelection = true; // Set flag
+            rollDiceButton.disabled = true; // Ensure roll button is off
+
+            const counts = {};
+            currentDice.forEach(type => { counts[type] = (counts[type] || 0) + 1; });
+            const countsValues = Object.values(counts);
+            const uniqueTypes = [...new Set(currentDice)];
+
+            let possibleCategories = [];
+            // Determine all categories this roll qualifies for
+            if (countsValues.includes(5)) possibleCategories.push('yahtzee');
+            if (checkStraight(uniqueTypes, 5)) possibleCategories.push('large_straight');
+            if (checkStraight(uniqueTypes, 4)) possibleCategories.push('small_straight');
+            if (countsValues.includes(4)) possibleCategories.push('four_of_kind');
+            if (countsValues.includes(3) && countsValues.includes(2)) possibleCategories.push('full_house');
+            if (countsValues.includes(3) || countsValues.includes(4) || countsValues.includes(5)) possibleCategories.push('three_of_kind'); // 4/5 of kind also count as 3 of kind
+
+            console.log("Roll qualifies for:", possibleCategories);
+
+            // Highlight available slots
+            let hasSelectableMatch = false;
+            scorecardArea.querySelectorAll('.scorecard-slot').forEach(slotElement => {
+                const category = slotElement.dataset.category;
+                // Slot is selectable if it's empty AND (it matches the roll OR player must score zero)
+                if (scorecard[category] === null) { // Check if slot is empty
+                    if (possibleCategories.includes(category)) {
+                        slotElement.classList.add('selectable');
+                        slotElement.addEventListener('click', handleSlotSelection);
+                        hasSelectableMatch = true;
+                    }
+                } else {
+                    slotElement.classList.remove('selectable'); // Ensure filled slots aren't selectable
+                }
+            });
+
+             // If no direct match is available in empty slots, allow selecting any empty slot for a zero score
+            if (!hasSelectableMatch) {
+                 diceResultText.textContent = "No match! Choose a slot for 0 points.";
+                 scorecardArea.querySelectorAll('.scorecard-slot').forEach(slotElement => {
+                     const category = slotElement.dataset.category;
+                     if (scorecard[category] === null) { // If slot is empty
+                         slotElement.classList.add('selectable'); // Make it selectable for zero score
+                         slotElement.addEventListener('click', handleSlotSelection);
+                     }
+                 });
+            } else {
+                 diceResultText.textContent = "Select a highlighted goal!";
+            }
+        }
+
+        // Handle clicking on a selectable scorecard slot
+        function handleSlotSelection(event) {
+            if (!isAwaitingSlotSelection) return;
+
+            const selectedSlot = event.currentTarget; // The slot div that was clicked
+            const categoryName = selectedSlot.dataset.category;
+
+            console.log(`Slot selected: ${categoryName}`);
+            playSound(scoreSlotSound, 'E5', '8n');
+
+            // Calculate score (use fixed score or 0 if forced)
+            const score = calculateCategoryScore(categoryName, currentDice);
+            scorecard[categoryName] = score; // Update scorecard state
+            slotsFilledCount++;
+
+            // Update UI for the selected slot
+            selectedSlot.classList.remove('selectable');
+            selectedSlot.classList.add('filled');
+            selectedSlot.querySelector('.score').textContent = score;
+            selectedSlot.querySelector('.score').classList.remove('empty');
+
+            // Remove listeners from all slots
+            scorecardArea.querySelectorAll('.scorecard-slot').forEach(slotElement => {
+                slotElement.classList.remove('selectable');
+                // Clean up listener by replacing the node (simplest way)
+                slotElement.replaceWith(slotElement.cloneNode(true));
+            });
+
+            // Update total score and UI
+            score += score; // Add category score to total score
+            animateScoreUpdate(score);
+            updateUI(); // Update main score and slots filled display
+
+            isAwaitingSlotSelection = false; // Exit selection mode
+            endDicePhase(); // Clean up dice area, reset meter, etc.
+            checkLevelComplete(); // Check if level goal met
+        }
+
+        // Calculate score for a specific category based on the dice roll
+        function calculateCategoryScore(categoryName, diceRoll) {
+            const counts = {};
+            diceRoll.forEach(type => { counts[type] = (counts[type] || 0) + 1; });
+            const countsValues = Object.values(counts);
+            const uniqueTypes = [...new Set(diceRoll)];
+
+            switch (categoryName) {
+                case 'yahtzee':
+                    return countsValues.includes(5) ? CATEGORY_SCORES.yahtzee : 0;
+                case 'large_straight':
+                    return checkStraight(uniqueTypes, 5) ? CATEGORY_SCORES.large_straight : 0;
+                case 'small_straight':
+                    // Allow large straight to count as small straight
+                    return (checkStraight(uniqueTypes, 4) || checkStraight(uniqueTypes, 5)) ? CATEGORY_SCORES.small_straight : 0;
+                case 'four_of_kind':
+                    // Allow Yahtzee to count as 4 of a kind
+                    return (countsValues.includes(4) || countsValues.includes(5)) ? CATEGORY_SCORES.four_of_kind : 0;
+                case 'full_house':
+                    // Yahtzee does NOT count as Full House
+                    return (countsValues.includes(3) && countsValues.includes(2)) ? CATEGORY_SCORES.full_house : 0;
+                case 'three_of_kind':
+                    // Allow 4kind/Yahtzee to count as 3 of a kind
+                    return (countsValues.includes(3) || countsValues.includes(4) || countsValues.includes(5)) ? CATEGORY_SCORES.three_of_kind : 0;
+                default:
+                    return 0; // Should not happen
+            }
+        }
+
+        // Helper function to check for straights (same as in V2)
+        function checkStraight(uniqueDiceTypes, requiredLength) { if (uniqueDiceTypes.length < requiredLength) return false; const orderedValues = uniqueDiceTypes.map(type => GEM_ORDER[type]).sort((a, b) => a - b); let currentStraight = 1; for (let i = 1; i < orderedValues.length; i++) { if (orderedValues[i] === orderedValues[i-1] + 1) currentStraight++; else if (orderedValues[i] !== orderedValues[i-1]) currentStraight = 1; if (currentStraight >= requiredLength) return true; } return false; }
+
+        // Cleans up state after the dice phase is fully complete
+        function endDicePhase() {
+             console.log("Ending Dice Phase.");
+             isDicePhaseActive = false;
+             isAwaitingSlotSelection = false; // Ensure this is reset
+             diceRollCount = 0;
+             heldDiceIndices.clear();
+             currentDice = [];
+             diceArea.style.display = 'none';
+             diceMeterValue = 0; // Reset meter value
+             diceMeterBar.style.width = '0%';
+             diceMeterBar.classList.remove('full');
+             rollDiceButton.textContent = "Roll Dice!";
+             rollDiceButton.disabled = true;
+             isCheckingMatches = false; // Release board lock if held
+             checkPossibleMoves(); // Check board state after dice phase
+        }
+
+        // --- UI Update ---
+        function updateUI() {
+            scoreValueElement.textContent = score;
+            movesLeftElement.textContent = movesLeft;
+            levelElement.textContent = currentLevel;
+            slotsFilledElement.textContent = slotsFilledCount;
+            targetSlotsElement.textContent = targetSlotsFilled;
+        }
+
+        // --- Game Over / Level Complete Logic ---
+        function checkLevelComplete() {
+            if (isGameOver) return;
+
+            if (slotsFilledCount >= targetSlotsFilled) {
+                endGame(true); // Win condition met
+            } else if (movesLeft <= 0) {
+                // Check win condition again in case last move filled last slot
+                 if (slotsFilledCount >= targetSlotsFilled) {
+                     endGame(true);
+                 } else {
+                     endGame(false); // Lose - out of moves
+                 }
+            }
+            // Check for no possible moves is handled by checkPossibleMoves()
+        }
+
+         // Checks if any valid swaps exist on the board
+         function checkPossibleMoves() {
+             if (isGameOver || isSwapping || isCheckingMatches || isDicePhaseActive || isAwaitingSlotSelection) return;
+             for (let r = 0; r < GRID_SIZE; r++) { for (let c = 0; c < GRID_SIZE; c++) { if (c < GRID_SIZE - 1 && canSwapCreateMatch(r, c, r, c + 1)) return; if (r < GRID_SIZE - 1 && canSwapCreateMatch(r, c, r + 1, c)) return; } }
+             console.log("No possible moves found!");
+             if (slotsFilledCount < targetSlotsFilled) endGame(false); // Lose only if goal not met
+         }
+
+         // Simulates a swap and checks if it creates a match or involves special
+         function canSwapCreateMatch(r1, c1, r2, c2) { /* (Same as V2) */ const cell1 = grid[r1]?.[c1]; const cell2 = grid[r2]?.[c2]; if (!cell1 || !cell2) return false; if (cell1.isSpecial || cell2.isSpecial) return true; const type1 = cell1.type; const type2 = cell2.type; if (checkMatchAtPointWithTempType(r1, c1, type2, r2, c2)) return true; if (checkMatchAtPointWithTempType(r2, c2, type1, r1, c1)) return true; return false; }
+         // Checks if placing 'tempType' at (row, col) creates a match
+         function checkMatchAtPointWithTempType(row, col, tempType, ignoreR, ignoreC) { /* (Same as V2) */ let hCount = 1; for (let c = col - 1; c >= 0; c--) { if (r === ignoreR && c === ignoreC) continue; if (grid[row][c]?.type === tempType && !grid[row][c]?.isSpecial) hCount++; else break; } for (let c = col + 1; c < GRID_SIZE; c++) { if (r === ignoreR && c === ignoreC) continue; if (grid[row][c]?.type === tempType && !grid[row][c]?.isSpecial) hCount++; else break; } if (hCount >= MIN_MATCH_LENGTH) return true; let vCount = 1; for (let r = row - 1; r >= 0; r--) { if (r === ignoreR && c === ignoreC) continue; if (grid[r][col]?.type === tempType && !grid[r][col]?.isSpecial) vCount++; else break; } for (let r = row + 1; r < GRID_SIZE; r++) { if (r === ignoreR && c === ignoreC) continue; if (grid[r][col]?.type === tempType && !grid[r][col]?.isSpecial) vCount++; else break; } if (vCount >= MIN_MATCH_LENGTH) return true; return false; }
+
+        function endGame(isWin) {
+             if (isGameOver) return;
+             isGameOver = true; isDicePhaseActive = false; isAwaitingSlotSelection = false;
+             console.log("Game Over. Win:", isWin);
+             if (selectedGem) { selectedGem.element.classList.remove('selected'); selectedGem = null; }
+
+             if (isWin) {
+                 messageTitle.textContent = `Level ${currentLevel} Complete!`;
+                 messageText.textContent = `Goal Achieved! You filled ${slotsFilledCount}/${targetSlotsFilled} slots. Score: ${score}. Ready for Level ${currentLevel + 1}?`;
+                 playSound(winSound, 'C6', '1n');
+                 messageButton.textContent = "Next Level";
+                 // Clone and replace button to remove old listeners before adding new one
+                 const oldButton = messageButton;
+                 const newButton = oldButton.cloneNode(true);
+                 oldButton.parentNode.replaceChild(newButton, oldButton);
+                 newButton.onclick = () => { playSound(buttonSound, 'G4', '16n'); initGame(currentLevel + 1); };
+                 document.getElementById('message-button').onclick = newButton.onclick; // Re-assign global var if needed
+
+             } else {
+                 messageTitle.textContent = "Goal Not Met...";
+                 if (movesLeft <= 0 && slotsFilledCount < targetSlotsFilled) messageText.textContent = `Out of moves on Level ${currentLevel}! Filled ${slotsFilledCount}/${targetSlotsFilled} slots. Score: ${score}.`;
+                 else messageText.textContent = `No more moves on Level ${currentLevel}! Filled ${slotsFilledCount}/${targetSlotsFilled} slots. Score: ${score}.`;
+                 playSound(loseSound, 'C3', '1n');
+                 messageButton.textContent = "Try Again";
+                 // Clone and replace button
+                 const oldButton = messageButton;
+                 const newButton = oldButton.cloneNode(true);
+                 oldButton.parentNode.replaceChild(newButton, oldButton);
+                 newButton.onclick = () => { playSound(buttonSound, 'G4', '16n'); initGame(currentLevel); };
+                  document.getElementById('message-button').onclick = newButton.onclick; // Re-assign global var
+             }
+             messageOverlay.style.display = 'flex';
+             rollDiceButton.disabled = true;
+             diceArea.style.display = 'none';
+        }
+
+        // --- Utility ---
+        function getGemElement(row, col) { return grid[row]?.[col]?.element ?? null; }
+        function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+        // --- Event Listeners ---
+        rollDiceButton.addEventListener('click', rollDice);
+        restartButton.addEventListener('click', () => { playSound(buttonSound, 'G4', '16n'); initGame(currentLevel); });
+        // Message button listener is set dynamically in endGame
+
+        // --- Initial Start ---
+        window.onload = () => {
+             document.body.addEventListener('pointerdown', initializeSounds, { once: true, passive: false });
+             initGame(1); // Start at level 1
+        };
+
+    </script>
+</body>
+</html>
